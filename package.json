@@ -1,9 +1,9 @@
 {
-  "name": "safe-env-getter",
+  "name": "strict-env-resolver",
   "description": "Type-safe environment variable getter for Node.js. Reads and parses process.env with specs (string, number, boolean, enum), optional defaults, and structured validation errors when values are missing or invalid.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gammarers-labs/safe-env-getter.git"
+    "url": "https://github.com/gammarers-labs/strict-env-resolver.git"
   },
   "scripts": {
     "build": "projen build",

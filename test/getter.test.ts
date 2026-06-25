@@ -1,8 +1,8 @@
 import {
-  SafeEnvGetter,
-  SafeEnvGetterValidationError,
-  SafeEnvType,
-  type SafeEnvError,
+  StrictEnvResolver,
+  StrictEnvValidationError,
+  StrictEnvType,
+  type StrictEnvValidationEntry,
 } from '../src';
 
 const setEnv = (key: string, value: string): void => {
@@ -13,53 +13,53 @@ const unsetEnv = (key: string): void => {
   delete process.env[key];
 };
 
-const expectGetEnvValidationError = <K extends string>(
+const expectResolveValidationError = <K extends string>(
   fn: () => unknown,
   key: K,
-  expected: SafeEnvError<K>,
+  expected: StrictEnvValidationEntry<K>,
 ): void => {
-  expect(fn).toThrow(SafeEnvGetterValidationError);
+  expect(fn).toThrow(StrictEnvValidationError);
   try {
     fn();
-    throw new Error('Expected getEnv to throw');
+    throw new Error('Expected resolve to throw');
   } catch (e) {
-    expect(e).toBeInstanceOf(SafeEnvGetterValidationError);
-    const ve = e as SafeEnvGetterValidationError<K>;
+    expect(e).toBeInstanceOf(StrictEnvValidationError);
+    const ve = e as StrictEnvValidationError<K>;
     expect(ve.errors).toHaveLength(1);
     expect(ve.errors[0]).toEqual(expected);
     expect(ve.keys).toEqual([key]);
   }
 };
 
-describe('SafeEnvGetter.getEnv', () => {
+describe('StrictEnvResolver.resolve', () => {
   describe('string', () => {
     test('should default to String type when spec omitted', () => {
       setEnv('TEST_STR', 'hello');
-      expect(SafeEnvGetter.getEnv('TEST_STR')).toBe('hello');
+      expect(StrictEnvResolver.resolve('TEST_STR')).toBe('hello');
       unsetEnv('TEST_STR');
     });
 
     test('should return value when set', () => {
       setEnv('TEST_STR', 'test');
-      expect(SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String)).toBe('test');
+      expect(StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String)).toBe('test');
       unsetEnv('TEST_STR');
     });
 
     test('should return default when missing', () => {
       unsetEnv('TEST_STR');
-      expect(SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String, { default: 'fallback' })).toBe('fallback');
+      expect(StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String, { default: 'fallback' })).toBe('fallback');
     });
 
     test('should return default when empty string', () => {
       setEnv('TEST_STR', '');
-      expect(SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String, { default: 'fallback' })).toBe('fallback');
+      expect(StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String, { default: 'fallback' })).toBe('fallback');
       unsetEnv('TEST_STR');
     });
 
     test('should throw when missing and no default', () => {
       unsetEnv('TEST_STR');
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String),
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String),
         'TEST_STR',
         {
           key: 'TEST_STR',
@@ -72,14 +72,14 @@ describe('SafeEnvGetter.getEnv', () => {
 
     test('should return whitespace-only value as-is by default', () => {
       setEnv('TEST_STR', '   ');
-      expect(SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String)).toBe('   ');
+      expect(StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String)).toBe('   ');
       unsetEnv('TEST_STR');
     });
 
     test('should treat whitespace-only as missing when trim is true', () => {
       setEnv('TEST_STR', '   ');
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String, { trim: true }),
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String, { trim: true }),
         'TEST_STR',
         {
           key: 'TEST_STR',
@@ -93,38 +93,42 @@ describe('SafeEnvGetter.getEnv', () => {
 
     test('should return trimmed value when trim is true', () => {
       setEnv('TEST_STR', '  hello  ');
-      expect(SafeEnvGetter.getEnv('TEST_STR', SafeEnvType.String, { trim: true })).toBe('hello');
+      expect(StrictEnvResolver.resolve('TEST_STR', StrictEnvType.String, { trim: true })).toBe('hello');
       unsetEnv('TEST_STR');
     });
   });
 
-  describe('number (strict decimal integer)', () => {
+  describe('number', () => {
     test.each([
       ['42', 42],
       ['0', 0],
       ['-1', -1],
       ['007', 7],
       ['  42  ', 42],
-    ] as const)('should parse valid integer: %s → %s', (raw, expected) => {
+      ['3.14', 3.14],
+      ['1e5', 100000],
+      ['+42', 42],
+      ['0x10', 16],
+    ] as const)('should parse valid number: %s → %s', (raw, expected) => {
       setEnv('TEST_NUM', raw);
-      expect(SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number)).toBe(expected);
+      expect(StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number)).toBe(expected);
       unsetEnv('TEST_NUM');
     });
 
     test('should return default when missing', () => {
       unsetEnv('TEST_NUM');
-      expect(SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number, { default: 100 })).toBe(100);
+      expect(StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number, { default: 100 })).toBe(100);
     });
 
     test('should return default when empty string', () => {
       setEnv('TEST_NUM', '');
-      expect(SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number, { default: 100 })).toBe(100);
+      expect(StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number, { default: 100 })).toBe(100);
       unsetEnv('TEST_NUM');
     });
 
     test('should throw when missing and no default', () => {
       unsetEnv('TEST_NUM');
-      expect(() => SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number)).toThrow(
+      expect(() => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number)).toThrow(
         'Missing required environment variable: TEST_NUM',
       );
     });
@@ -133,15 +137,11 @@ describe('SafeEnvGetter.getEnv', () => {
       'not-a-number',
       'Infinity',
       '-Infinity',
-      '0x10',
-      '3.14',
       'NaN',
-      '+42',
-      '1e5',
-    ])('should reject invalid integer: %s', (raw) => {
+    ])('should reject non-finite number: %s', (raw) => {
       setEnv('TEST_NUM', raw);
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number),
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number),
         'TEST_NUM',
         {
           key: 'TEST_NUM',
@@ -155,8 +155,8 @@ describe('SafeEnvGetter.getEnv', () => {
 
     test('should treat whitespace-only as missing', () => {
       setEnv('TEST_NUM', '   ');
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number),
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number),
         'TEST_NUM',
         {
           key: 'TEST_NUM',
@@ -171,8 +171,8 @@ describe('SafeEnvGetter.getEnv', () => {
     test('should reject when Number.isFinite returns false for digit string', () => {
       const isFiniteSpy = jest.spyOn(Number, 'isFinite').mockReturnValue(false);
       setEnv('TEST_NUM', '42');
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number),
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number),
         'TEST_NUM',
         {
           key: 'TEST_NUM',
@@ -184,41 +184,24 @@ describe('SafeEnvGetter.getEnv', () => {
       isFiniteSpy.mockRestore();
       unsetEnv('TEST_NUM');
     });
-
-    test('should reject when Number.isInteger returns false for digit string', () => {
-      const isIntegerSpy = jest.spyOn(Number, 'isInteger').mockReturnValue(false);
-      setEnv('TEST_NUM', '42');
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_NUM', SafeEnvType.Number),
-        'TEST_NUM',
-        {
-          key: 'TEST_NUM',
-          message: 'Env TEST_NUM: expected number, got "42"',
-          raw: '42',
-          kind: 'invalid_number',
-        },
-      );
-      isIntegerSpy.mockRestore();
-      unsetEnv('TEST_NUM');
-    });
   });
 
   describe('boolean', () => {
     test.each(['1', 'true', 'TRUE', 'yes', 'on'])('should parse %s as true', (val) => {
       setEnv('TEST_BOOL', val);
-      expect(SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean)).toBe(true);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toBe(true);
       unsetEnv('TEST_BOOL');
     });
 
     test.each(['  true  ', ' 1 ', ' YES '])('should parse trimmed %s as true', (val) => {
       setEnv('TEST_BOOL', val);
-      expect(SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean)).toBe(true);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toBe(true);
       unsetEnv('TEST_BOOL');
     });
 
     test('should treat whitespace-only as missing', () => {
       setEnv('TEST_BOOL', '   ');
-      expect(() => SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean)).toThrow(
+      expect(() => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toThrow(
         'Missing required environment variable: TEST_BOOL',
       );
       unsetEnv('TEST_BOOL');
@@ -226,24 +209,24 @@ describe('SafeEnvGetter.getEnv', () => {
 
     test.each(['0', 'false', 'no', 'off'])('should parse %s as false', (val) => {
       setEnv('TEST_BOOL', val);
-      expect(SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean)).toBe(false);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toBe(false);
       unsetEnv('TEST_BOOL');
     });
 
     test('should return default when empty string', () => {
       setEnv('TEST_BOOL', '');
-      expect(SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean, { default: true })).toBe(true);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean, { default: true })).toBe(true);
       unsetEnv('TEST_BOOL');
     });
 
     test('should return default when missing', () => {
       unsetEnv('TEST_BOOL');
-      expect(SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean, { default: true })).toBe(true);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean, { default: true })).toBe(true);
     });
 
     test('should throw when missing and no default', () => {
       unsetEnv('TEST_BOOL');
-      expect(() => SafeEnvGetter.getEnv('TEST_BOOL', SafeEnvType.Boolean)).toThrow(
+      expect(() => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toThrow(
         'Missing required environment variable: TEST_BOOL',
       );
     });
@@ -254,25 +237,25 @@ describe('SafeEnvGetter.getEnv', () => {
 
     test('should return value when in choices', () => {
       setEnv('TEST_ENUM', 'b');
-      expect(SafeEnvGetter.getEnv('TEST_ENUM', SafeEnvType.Enum(choices))).toBe('b');
+      expect(StrictEnvResolver.resolve('TEST_ENUM', StrictEnvType.Enum(choices))).toBe('b');
       unsetEnv('TEST_ENUM');
     });
 
     test('should return trimmed value when surrounded by whitespace', () => {
       setEnv('TEST_ENUM', '  b  ');
-      expect(SafeEnvGetter.getEnv('TEST_ENUM', SafeEnvType.Enum(choices))).toBe('b');
+      expect(StrictEnvResolver.resolve('TEST_ENUM', StrictEnvType.Enum(choices))).toBe('b');
       unsetEnv('TEST_ENUM');
     });
 
     test('should return default when missing', () => {
       unsetEnv('TEST_ENUM');
-      expect(SafeEnvGetter.getEnv('TEST_ENUM', SafeEnvType.Enum(choices), { default: 'a' })).toBe('a');
+      expect(StrictEnvResolver.resolve('TEST_ENUM', StrictEnvType.Enum(choices), { default: 'a' })).toBe('a');
     });
 
     test('should throw when value is not in choices', () => {
       setEnv('TEST_ENUM', 'x');
-      expectGetEnvValidationError(
-        () => SafeEnvGetter.getEnv('TEST_ENUM', SafeEnvType.Enum(choices)),
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_ENUM', StrictEnvType.Enum(choices)),
         'TEST_ENUM',
         {
           key: 'TEST_ENUM',
@@ -286,22 +269,22 @@ describe('SafeEnvGetter.getEnv', () => {
 
     test('should throw when missing and no default', () => {
       unsetEnv('TEST_ENUM');
-      expect(() => SafeEnvGetter.getEnv('TEST_ENUM', SafeEnvType.Enum(choices))).toThrow(
+      expect(() => StrictEnvResolver.resolve('TEST_ENUM', StrictEnvType.Enum(choices))).toThrow(
         'Missing required environment variable: TEST_ENUM',
       );
     });
   });
 });
 
-describe('SafeEnvGetter.getEnvs', () => {
+describe('StrictEnvResolver.resolveAll', () => {
   test('should return parsed values with defaults', () => {
     setEnv('TEST_PORT', '1234');
     unsetEnv('TEST_MODE');
 
-    const envs = SafeEnvGetter.getEnvs({
-      TEST_PORT: SafeEnvType.Number,
-      TEST_DEBUG: [SafeEnvType.Boolean, { default: false }],
-      TEST_MODE: [SafeEnvType.Enum(['read', 'write'] as const), { default: 'read' }],
+    const envs = StrictEnvResolver.resolveAll({
+      TEST_PORT: StrictEnvType.Number,
+      TEST_DEBUG: [StrictEnvType.Boolean, { default: false }],
+      TEST_MODE: [StrictEnvType.Enum(['read', 'write'] as const), { default: 'read' }],
     });
 
     expect(envs).toEqual({
@@ -317,27 +300,27 @@ describe('SafeEnvGetter.getEnvs', () => {
 
   test('should use default for empty string', () => {
     setEnv('TEST_PORT', '');
-    const envs = SafeEnvGetter.getEnvs({
-      TEST_PORT: [SafeEnvType.Number, { default: 3000 }],
+    const envs = StrictEnvResolver.resolveAll({
+      TEST_PORT: [StrictEnvType.Number, { default: 3000 }],
     });
     expect(envs).toEqual({ TEST_PORT: 3000 });
     unsetEnv('TEST_PORT');
   });
 
-  test('should collect invalid_number for non-integer env value', () => {
-    setEnv('TEST_PORT', 'Infinity');
+  test('should collect invalid_number for non-numeric env value', () => {
+    setEnv('TEST_PORT', 'not-a-number');
 
     try {
-      SafeEnvGetter.getEnvs({ TEST_PORT: SafeEnvType.Number });
-      throw new Error('Expected getEnvs to throw');
+      StrictEnvResolver.resolveAll({ TEST_PORT: StrictEnvType.Number });
+      throw new Error('Expected resolveAll to throw');
     } catch (e) {
-      expect(e).toBeInstanceOf(SafeEnvGetterValidationError);
-      const ve = e as SafeEnvGetterValidationError<'TEST_PORT'>;
+      expect(e).toBeInstanceOf(StrictEnvValidationError);
+      const ve = e as StrictEnvValidationError<'TEST_PORT'>;
       expect(ve.errors).toEqual([
         {
           key: 'TEST_PORT',
-          message: 'Env TEST_PORT: expected number, got "Infinity"',
-          raw: 'Infinity',
+          message: 'Env TEST_PORT: expected number, got "not-a-number"',
+          raw: 'not-a-number',
           kind: 'invalid_number',
         },
       ]);
@@ -352,14 +335,14 @@ describe('SafeEnvGetter.getEnvs', () => {
     setEnv('TEST_MODE', 'bad');
 
     try {
-      SafeEnvGetter.getEnvs({
-        TEST_PORT: SafeEnvType.Number,
-        TEST_MODE: SafeEnvType.Enum(['read', 'write'] as const),
+      StrictEnvResolver.resolveAll({
+        TEST_PORT: StrictEnvType.Number,
+        TEST_MODE: StrictEnvType.Enum(['read', 'write'] as const),
       });
-      throw new Error('Expected getEnvs to throw');
+      throw new Error('Expected resolveAll to throw');
     } catch (e) {
-      expect(e).toBeInstanceOf(SafeEnvGetterValidationError);
-      const ve = e as SafeEnvGetterValidationError<'TEST_PORT' | 'TEST_MODE'>;
+      expect(e).toBeInstanceOf(StrictEnvValidationError);
+      const ve = e as StrictEnvValidationError<'TEST_PORT' | 'TEST_MODE'>;
       expect(ve.errors).toHaveLength(2);
       expect(ve.keys).toEqual(['TEST_PORT', 'TEST_MODE']);
       expect(ve.errors).toEqual([
@@ -383,19 +366,19 @@ describe('SafeEnvGetter.getEnvs', () => {
 
   test('should collect missing, invalid_number, and invalid_enum together', () => {
     unsetEnv('TEST_PORT');
-    setEnv('TEST_WORKERS', '3.14');
+    setEnv('TEST_WORKERS', 'not-a-number');
     setEnv('TEST_MODE', 'invalid');
 
     try {
-      SafeEnvGetter.getEnvs({
-        TEST_PORT: SafeEnvType.Number,
-        TEST_WORKERS: SafeEnvType.Number,
-        TEST_MODE: SafeEnvType.Enum(['read', 'write'] as const),
+      StrictEnvResolver.resolveAll({
+        TEST_PORT: StrictEnvType.Number,
+        TEST_WORKERS: StrictEnvType.Number,
+        TEST_MODE: StrictEnvType.Enum(['read', 'write'] as const),
       });
-      throw new Error('Expected getEnvs to throw');
+      throw new Error('Expected resolveAll to throw');
     } catch (e) {
-      expect(e).toBeInstanceOf(SafeEnvGetterValidationError);
-      const ve = e as SafeEnvGetterValidationError<'TEST_PORT' | 'TEST_WORKERS' | 'TEST_MODE'>;
+      expect(e).toBeInstanceOf(StrictEnvValidationError);
+      const ve = e as StrictEnvValidationError<'TEST_PORT' | 'TEST_WORKERS' | 'TEST_MODE'>;
       expect(ve.errors).toHaveLength(3);
       expect(ve.keys).toEqual(['TEST_PORT', 'TEST_WORKERS', 'TEST_MODE']);
       expect(ve.errors).toEqual([
@@ -407,8 +390,8 @@ describe('SafeEnvGetter.getEnvs', () => {
         },
         {
           key: 'TEST_WORKERS',
-          message: 'Env TEST_WORKERS: expected number, got "3.14"',
-          raw: '3.14',
+          message: 'Env TEST_WORKERS: expected number, got "not-a-number"',
+          raw: 'not-a-number',
           kind: 'invalid_number',
         },
         {
@@ -428,9 +411,9 @@ describe('SafeEnvGetter.getEnvs', () => {
     setEnv('TEST_DEBUG', 'true');
     setEnv('TEST_VERBOSE', '0');
 
-    const envs = SafeEnvGetter.getEnvs({
-      TEST_DEBUG: SafeEnvType.Boolean,
-      TEST_VERBOSE: SafeEnvType.Boolean,
+    const envs = StrictEnvResolver.resolveAll({
+      TEST_DEBUG: StrictEnvType.Boolean,
+      TEST_VERBOSE: StrictEnvType.Boolean,
     });
 
     expect(envs).toEqual({
@@ -446,9 +429,9 @@ describe('SafeEnvGetter.getEnvs', () => {
     setEnv('TEST_MODE', 'write');
     setEnv('TEST_LABEL', 'my-app');
 
-    const envs = SafeEnvGetter.getEnvs({
-      TEST_MODE: SafeEnvType.Enum(['read', 'write'] as const),
-      TEST_LABEL: SafeEnvType.String,
+    const envs = StrictEnvResolver.resolveAll({
+      TEST_MODE: StrictEnvType.Enum(['read', 'write'] as const),
+      TEST_LABEL: StrictEnvType.String,
     });
 
     expect(envs).toEqual({
