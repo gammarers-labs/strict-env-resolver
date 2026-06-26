@@ -9,7 +9,7 @@ const project = new typescript.TypeScriptProject({
   repository: 'https://github.com/gammarers-labs/strict-env-resolver.git',
   description: 'Type-safe environment variable getter for Node.js. Reads and parses process.env with specs (string, number, boolean, enum), optional defaults, and structured validation errors when values are missing or invalid.',
   keywords: ['environment', 'variables', 'getter', 'safe', 'env'],
-  releaseToNpm: false,
+  releaseToNpm: true,
   npmTrustedPublishing: false,
   npmAccess: javascript.NpmAccess.PUBLIC,
   minNodeVersion: '20.0.0',
