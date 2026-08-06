@@ -5,7 +5,7 @@ const project = new typescript.TypeScriptProject({
   projenrcTs: true,
   authorName: 'yicr',
   authorEmail: 'yicr@users.noreply.github.com',
-  typescriptVersion: '5.9.x',
+  typescriptVersion: '6.0.x',
   repository: 'https://github.com/gammarers-labs/strict-env-resolver.git',
   description: 'Type-safe environment variable getter for Node.js. Reads and parses process.env with specs (string, number, boolean, enum), optional defaults, and structured validation errors when values are missing or invalid.',
   keywords: ['environment', 'variables', 'getter', 'safe', 'env'],
