@@ -1,17 +1,17 @@
 /**
  * Spec for a string environment variable.
- * Returned as-is by default (`trim` defaults to `false`). Set `trim: true` in options to trim
- * whitespace and treat whitespace-only values as missing.
- * The default value is passed via the third argument of `resolve` or a `[spec, options]` tuple in `resolveAll`, not in the spec.
+ * Values are returned as-is unless `trim: true` is set in {@link StrictEnvOptions}
+ * (whitespace-only values are then treated as missing).
+ * Defaults belong in {@link StrictEnvOptions}, not on this spec.
  */
-export type StrictEnvTypeString = { type: 'string'; default?: string };
+export type StrictEnvTypeString = { type: 'string' };
 
 /**
  * Spec for a numeric environment variable.
  * Values are parsed with `Number()`; `NaN`, `Infinity`, and `-Infinity` are rejected.
- * The default value is passed via the third argument of `resolve` or a `[spec, options]` tuple in `resolveAll`, not in the spec.
+ * Defaults belong in {@link StrictEnvOptions}, not on this spec.
  */
-export type StrictEnvTypeNumber = { type: 'number'; default?: number };
+export type StrictEnvTypeNumber = { type: 'number' };
 
 /**
  * Pattern for boolean env values that parse as `true`.
@@ -22,7 +22,7 @@ const TRUE_BOOLEAN_PATTERN = /^(1|true|yes|on)$/i;
 /**
  * Parses a string as a finite number for environment variables.
  *
- * @param raw - Trimmed environment variable value.
+ * @param raw - Normalized environment variable value (trimmed when `trim` is enabled).
  * @returns Parsed number, or `undefined` when the value is not a finite number.
  */
 const parseNumber = (raw: string): number | undefined => {
@@ -34,30 +34,31 @@ const parseNumber = (raw: string): number | undefined => {
 };
 
 /**
- * Parses a trimmed string as a boolean environment variable value.
+ * Parses a normalized string as a boolean environment variable value.
  *
- * @param normalizedRaw - Trimmed raw environment variable value.
+ * @param normalizedRaw - Normalized environment variable value (trimmed when `trim` is enabled).
  * @returns `true` for `1`/`true`/`yes`/`on` (case-insensitive); otherwise `false`.
  */
 const parseBooleanEnvValue = (normalizedRaw: string): boolean => TRUE_BOOLEAN_PATTERN.test(normalizedRaw);
 
 /**
  * Spec for a boolean environment variable.
- * Parses `1`, `true`, `yes`, `on` (case-insensitive, after trim) as `true`; any other non-empty value as `false`.
- * Trims leading/trailing whitespace by default (see `StrictEnvOptions.trim`).
- * The default value is passed via the third argument of `resolve` or a `[spec, options]` tuple in `resolveAll`, not in the spec.
+ * Parses `1`, `true`, `yes`, `on` (case-insensitive, after normalization) as `true`;
+ * any other non-empty value as `false`.
+ * Trims leading/trailing whitespace by default (see {@link StrictEnvOptions.trim}).
+ * Defaults belong in {@link StrictEnvOptions}, not on this spec.
  */
-export type StrictEnvTypeBoolean = { type: 'boolean'; default?: boolean };
+export type StrictEnvTypeBoolean = { type: 'boolean' };
 
 /**
  * Spec for an enum environment variable with a fixed set of choices.
- * The value must be one of `choices` (compared after trim); otherwise validation fails.
- * Trims leading/trailing whitespace by default (see `StrictEnvOptions.trim`).
- * The default value is passed via the third argument of `resolve` or a `[spec, options]` tuple in `resolveAll`, not in the spec.
+ * The value must be one of `choices` (compared after normalization); otherwise validation fails.
+ * Trims leading/trailing whitespace by default (see {@link StrictEnvOptions.trim}).
+ * Defaults belong in {@link StrictEnvOptions}, not on this spec.
  *
  * @template T - Literal string union of allowed values.
  */
-export type StrictEnvTypeEnum<T extends string = string> = { type: 'enum'; choices: readonly T[]; default?: T };
+export type StrictEnvTypeEnum<T extends string = string> = { type: 'enum'; choices: readonly T[] };
 
 /** Union of all environment variable spec types. */
 export type StrictEnvSpec =
@@ -162,7 +163,8 @@ export class StrictEnvValidationError<K extends string = string> extends StrictE
 
 /**
  * Predefined spec constants for use with `resolve` or as schema values in `resolveAll`.
- * Provide defaults via the third argument of `resolve` or a `[spec, { default }]` tuple in `resolveAll`.
+ * Specs describe type only; provide `default` / `trim` via {@link StrictEnvOptions}
+ * (third argument of `resolve`, or a `[spec, options]` tuple in `resolveAll`).
  */
 export const StrictEnvType = {
   /** Spec for a string value (returned as-is unless `trim: true` is set in options). */
@@ -203,6 +205,7 @@ export type StrictEnvSpecToType<S> =
  * @template S - Environment variable spec type.
  */
 export type StrictEnvOptions<S extends StrictEnvSpec> = {
+  /** Fallback when the variable is unset, empty (`""`), or whitespace-only (when `trim` is enabled). */
   default?: StrictEnvSpecToType<S>;
   /** When `true`, trims leading/trailing whitespace before validation. */
   trim?: boolean;
@@ -211,14 +214,15 @@ export type StrictEnvOptions<S extends StrictEnvSpec> = {
 /**
  * Schema entry for a single env var.
  *
- * Either provide a spec directly, or a tuple of `[spec, options]` to attach a default.
+ * Either a spec alone, or a `[spec, options]` tuple to attach {@link StrictEnvOptions}
+ * (for example `default` and/or `trim`).
  */
 export type StrictEnvSchemaEntry<S extends StrictEnvSpec = StrictEnvSpec> = S | readonly [S, StrictEnvOptions<S>];
 
 /**
  * Schema object used by `resolveAll()`.
  *
- * Keys are env var names, values are specs (optionally with defaults).
+ * Keys are env var names; values are specs or `[spec, options]` tuples.
  */
 export type StrictEnvSchema = Record<string, StrictEnvSchemaEntry>;
 
@@ -301,15 +305,15 @@ const resolveSchemaEntry = (
  *
  * Missing or empty (`""`) values use `defaultValue` when provided. When `trim` is enabled,
  * whitespace-only values are treated as empty. Number specs delegate to `parseNumber`.
- * Boolean specs treat `1`/`true`/`yes`/`on` (case-insensitive, after trim) as `true`.
- * Enum specs require an exact match in `choices` (after trim).
+ * Boolean specs treat `1`/`true`/`yes`/`on` (case-insensitive, after normalization) as `true`.
+ * Enum specs require an exact match in `choices` (after normalization).
  *
  * @template K - Environment variable key type.
  * @template S - Environment variable spec type.
  * @param key - Environment variable name.
  * @param spec - Type spec for the value.
  * @param raw - Raw value from `process.env`, if present.
- * @param defaultValue - Fallback when `raw` is missing or empty.
+ * @param defaultValue - Fallback from {@link StrictEnvOptions.default} when `raw` is missing or empty.
  * @param options - Optional trim override (`trim` defaults per spec type).
  * @returns Parsed value or a structured validation error.
  */
@@ -370,7 +374,8 @@ const parseEnvValue = <K extends string, S extends StrictEnvSpec>(
  *
  * Delegates validation to `parseEnvValue`. Missing or empty (`""`) values use
  * `options.default` when provided; otherwise a `StrictEnvValidationError` is thrown.
- * For `StrictEnvType.Number`, values are parsed as finite numbers (see `StrictEnvTypeNumber`).
+ * Whitespace-only values are treated as missing when `trim` is enabled.
+ * For `StrictEnvType.Number`, values are parsed as finite numbers (see {@link StrictEnvTypeNumber}).
  *
  * @template K - Environment variable key type.
  * @template S - Environment variable spec type.
@@ -378,7 +383,8 @@ const parseEnvValue = <K extends string, S extends StrictEnvSpec>(
  * @param spec - Type spec; defaults to `StrictEnvType.String` when omitted.
  * @param options - Optional `{ default, trim }`; see {@link StrictEnvOptions}.
  * @returns Parsed value with type inferred from `spec`.
- * @throws {StrictEnvValidationError} When the variable is missing, empty without a default, or invalid for the spec.
+ * @throws {StrictEnvValidationError} When the variable is missing, empty without a default,
+ *   whitespace-only without a default (when trimming), or invalid for the spec.
  */
 const resolve = <K extends string, S extends StrictEnvSpec = StrictEnvTypeString>(
   key: K,
@@ -400,9 +406,11 @@ const resolve = <K extends string, S extends StrictEnvSpec = StrictEnvTypeString
  * Number specs use the same finite-number rules as `resolve`.
  *
  * @template TSchema - Schema object type.
- * @param schema - Map of environment variable names to specs, optionally with per-key defaults via `[spec, { default }]`.
+ * @param schema - Map of environment variable names to specs or `[spec, options]` tuples
+ *   (see {@link StrictEnvOptions} for per-key `default` / `trim`).
  * @returns Parsed environment object with types inferred from the schema.
- * @throws {StrictEnvValidationError} When one or more variables are missing, empty without a default, or invalid.
+ * @throws {StrictEnvValidationError} When one or more variables are missing, empty without a default,
+ *   whitespace-only without a default (when trimming), or invalid.
  */
 const resolveAll = <TSchema extends StrictEnvSchema>(schema: TSchema): StrictEnvSchemaToType<TSchema> => {
   const envs: Partial<StrictEnvSchemaToType<TSchema>> = {};
