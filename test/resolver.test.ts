@@ -184,6 +184,167 @@ describe('StrictEnvResolver.resolve', () => {
       isFiniteSpy.mockRestore();
       unsetEnv('TEST_NUM');
     });
+
+    test('should accept value within Number constraints', () => {
+      setEnv('TEST_NUM', '10');
+      expect(StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number({ min: 1, max: 100 }))).toBe(10);
+      unsetEnv('TEST_NUM');
+    });
+
+    test('should reject value below min', () => {
+      setEnv('TEST_NUM', '0');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number({ min: 1 })),
+        'TEST_NUM',
+        {
+          key: 'TEST_NUM',
+          message: 'Env TEST_NUM: must be >= 1, got 0',
+          raw: '0',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_NUM');
+    });
+
+    test('should reject value above max', () => {
+      setEnv('TEST_NUM', '101');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number({ max: 100 })),
+        'TEST_NUM',
+        {
+          key: 'TEST_NUM',
+          message: 'Env TEST_NUM: must be <= 100, got 101',
+          raw: '101',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_NUM');
+    });
+
+    test('should reject non-integer when integer constraint is set', () => {
+      setEnv('TEST_NUM', '3.14');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NUM', StrictEnvType.Number({ integer: true })),
+        'TEST_NUM',
+        {
+          key: 'TEST_NUM',
+          message: 'Env TEST_NUM: expected integer, got "3.14"',
+          raw: '3.14',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_NUM');
+    });
+  });
+
+  describe('PositiveInt', () => {
+    test.each([
+      ['1', 1],
+      ['42', 42],
+      ['  7  ', 7],
+    ] as const)('should accept positive integer: %s → %s', (raw, expected) => {
+      setEnv('TEST_POS', raw);
+      expect(StrictEnvResolver.resolve('TEST_POS', StrictEnvType.PositiveInt)).toBe(expected);
+      unsetEnv('TEST_POS');
+    });
+
+    test.each(['0', '-1', '3.14', '1.5'])('should reject non-positive-integer: %s', (raw) => {
+      setEnv('TEST_POS', raw);
+      expect(() => StrictEnvResolver.resolve('TEST_POS', StrictEnvType.PositiveInt)).toThrow(
+        StrictEnvValidationError,
+      );
+      unsetEnv('TEST_POS');
+    });
+
+    test('should reject zero with min message', () => {
+      setEnv('TEST_POS', '0');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_POS', StrictEnvType.PositiveInt),
+        'TEST_POS',
+        {
+          key: 'TEST_POS',
+          message: 'Env TEST_POS: must be >= 1, got 0',
+          raw: '0',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_POS');
+    });
+
+    test('should reject float with integer message', () => {
+      setEnv('TEST_POS', '1.5');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_POS', StrictEnvType.PositiveInt),
+        'TEST_POS',
+        {
+          key: 'TEST_POS',
+          message: 'Env TEST_POS: expected integer, got "1.5"',
+          raw: '1.5',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_POS');
+    });
+
+    test('should return default when missing', () => {
+      unsetEnv('TEST_POS');
+      expect(StrictEnvResolver.resolve('TEST_POS', StrictEnvType.PositiveInt, { default: 1 })).toBe(1);
+    });
+  });
+
+  describe('NegativeInt', () => {
+    test.each([
+      ['-1', -1],
+      ['-42', -42],
+      ['  -7  ', -7],
+    ] as const)('should accept negative integer: %s → %s', (raw, expected) => {
+      setEnv('TEST_NEG', raw);
+      expect(StrictEnvResolver.resolve('TEST_NEG', StrictEnvType.NegativeInt)).toBe(expected);
+      unsetEnv('TEST_NEG');
+    });
+
+    test.each(['0', '1', '-3.14', '-1.5'])('should reject non-negative-integer: %s', (raw) => {
+      setEnv('TEST_NEG', raw);
+      expect(() => StrictEnvResolver.resolve('TEST_NEG', StrictEnvType.NegativeInt)).toThrow(
+        StrictEnvValidationError,
+      );
+      unsetEnv('TEST_NEG');
+    });
+
+    test('should reject zero with max message', () => {
+      setEnv('TEST_NEG', '0');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NEG', StrictEnvType.NegativeInt),
+        'TEST_NEG',
+        {
+          key: 'TEST_NEG',
+          message: 'Env TEST_NEG: must be <= -1, got 0',
+          raw: '0',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_NEG');
+    });
+
+    test('should reject float with integer message', () => {
+      setEnv('TEST_NEG', '-1.5');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_NEG', StrictEnvType.NegativeInt),
+        'TEST_NEG',
+        {
+          key: 'TEST_NEG',
+          message: 'Env TEST_NEG: expected integer, got "-1.5"',
+          raw: '-1.5',
+          kind: 'invalid_number',
+        },
+      );
+      unsetEnv('TEST_NEG');
+    });
+
+    test('should return default when missing', () => {
+      unsetEnv('TEST_NEG');
+      expect(StrictEnvResolver.resolve('TEST_NEG', StrictEnvType.NegativeInt, { default: -1 })).toBe(-1);
+    });
   });
 
   describe('boolean', () => {
