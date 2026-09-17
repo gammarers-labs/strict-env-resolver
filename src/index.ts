@@ -182,6 +182,25 @@ export class StrictEnvValidationError<K extends string = string> extends StrictE
   }
 }
 
+/** Inclusive lower bound for positive integers (`>= 1`). */
+const MIN_POSITIVE_INTEGER = 1;
+
+/** Inclusive upper bound for negative integers (`<= -1`). */
+const MAX_NEGATIVE_INTEGER = -1;
+
+/**
+ * Sign boundary for Positive (`> 0`), Negative (`< 0`), and non-negative (`>= 0`) presets.
+ */
+const ZERO = 0;
+
+/**
+ * Inclusive lower TCP/UDP port (IANA). Port 0 means "any available" and is rejected.
+ */
+const MIN_PORT = MIN_POSITIVE_INTEGER;
+
+/** Inclusive upper TCP/UDP port (IANA). */
+const MAX_PORT = 65535;
+
 /**
  * Builds a numeric env spec from optional constraints.
  *
@@ -237,18 +256,21 @@ type StrictEnvNumberSpecFactory = {
   (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber;
 } & StrictEnvTypeNumber & StrictEnvNumberPresets;
 
+// One object is both a spec (`Number`), a factory (`Number({...})`), and named presets (`Number.Port`).
 const NumberSpec: StrictEnvNumberSpecFactory = Object.assign(
   (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber => createNumberSpec(constraints),
   { type: 'number' } as const satisfies StrictEnvTypeNumber,
   {
     Integer: createNumberSpec({ integer: true }),
-    PositiveInteger: createNumberSpec({ min: 1, integer: true }),
-    NegativeInteger: createNumberSpec({ max: -1, integer: true }),
-    NonNegativeInteger: createNumberSpec({ min: 0, integer: true }),
-    Positive: createNumberSpec({ exclusiveMin: 0 }),
-    Negative: createNumberSpec({ exclusiveMax: 0 }),
-    NonNegative: createNumberSpec({ min: 0 }),
-    Port: createNumberSpec({ min: 1, max: 65535, integer: true }),
+    PositiveInteger: createNumberSpec({ min: MIN_POSITIVE_INTEGER, integer: true }),
+    NegativeInteger: createNumberSpec({ max: MAX_NEGATIVE_INTEGER, integer: true }),
+    NonNegativeInteger: createNumberSpec({ min: ZERO, integer: true }),
+
+    Positive: createNumberSpec({ exclusiveMin: ZERO }),
+    Negative: createNumberSpec({ exclusiveMax: ZERO }),
+    NonNegative: createNumberSpec({ min: ZERO }),
+
+    Port: createNumberSpec({ min: MIN_PORT, max: MAX_PORT, integer: true }),
   } as const satisfies StrictEnvNumberPresets,
 );
 
@@ -390,9 +412,11 @@ const validateNumberConstraints = <K extends string>(
   n: number,
   constraints: StrictEnvNumberConstraints,
 ): StrictEnvValidationEntry<K> | undefined => {
+  // Integer first so e.g. Port `80.5` reports "expected integer", not a range error.
   if (constraints.integer === true && !Number.isInteger(n)) {
     return { key, message: `Env ${key}: expected integer, got "${raw}"`, raw, kind: 'invalid_number' };
   }
+
   if (constraints.min !== undefined && n < constraints.min) {
     return {
       key,
@@ -401,6 +425,7 @@ const validateNumberConstraints = <K extends string>(
       kind: 'invalid_number',
     };
   }
+
   if (constraints.exclusiveMin !== undefined && n <= constraints.exclusiveMin) {
     return {
       key,
@@ -409,6 +434,7 @@ const validateNumberConstraints = <K extends string>(
       kind: 'invalid_number',
     };
   }
+
   if (constraints.max !== undefined && n > constraints.max) {
     return {
       key,
@@ -417,6 +443,7 @@ const validateNumberConstraints = <K extends string>(
       kind: 'invalid_number',
     };
   }
+
   if (constraints.exclusiveMax !== undefined && n >= constraints.exclusiveMax) {
     return {
       key,
@@ -425,6 +452,7 @@ const validateNumberConstraints = <K extends string>(
       kind: 'invalid_number',
     };
   }
+
   return undefined;
 };
 

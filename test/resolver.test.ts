@@ -556,11 +556,15 @@ describe('StrictEnvResolver.resolve', () => {
   });
 
   describe('Number.Port', () => {
+    const minPort = 1;
+    const maxPort = 65535;
+    const aboveMaxPort = maxPort + 1;
+
     test.each([
-      ['1', 1],
+      [String(minPort), minPort],
       ['80', 80],
       ['443', 443],
-      ['65535', 65535],
+      [String(maxPort), maxPort],
       ['  3000  ', 3000],
     ] as const)('should accept port: %s → %s', (raw, expected) => {
       setEnv('TEST_PORT', raw);
@@ -575,7 +579,7 @@ describe('StrictEnvResolver.resolve', () => {
         'TEST_PORT',
         {
           key: 'TEST_PORT',
-          message: 'Env TEST_PORT: must be >= 1, got 0',
+          message: `Env TEST_PORT: must be >= ${minPort}, got 0`,
           raw: '0',
           kind: 'invalid_number',
         },
@@ -583,15 +587,16 @@ describe('StrictEnvResolver.resolve', () => {
       unsetEnv('TEST_PORT');
     });
 
-    test('should reject 65536 with max message', () => {
-      setEnv('TEST_PORT', '65536');
+    test('should reject value above max port', () => {
+      const raw = String(aboveMaxPort);
+      setEnv('TEST_PORT', raw);
       expectResolveValidationError(
         () => StrictEnvResolver.resolve('TEST_PORT', StrictEnvType.Number.Port),
         'TEST_PORT',
         {
           key: 'TEST_PORT',
-          message: 'Env TEST_PORT: must be <= 65535, got 65536',
-          raw: '65536',
+          message: `Env TEST_PORT: must be <= ${maxPort}, got ${aboveMaxPort}`,
+          raw,
           kind: 'invalid_number',
         },
       );
