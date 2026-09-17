@@ -256,7 +256,10 @@ type StrictEnvNumberSpecFactory = {
   (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber;
 } & StrictEnvTypeNumber & StrictEnvNumberPresets;
 
-// One object is both a spec (`Number`), a factory (`Number({...})`), and named presets (`Number.Port`).
+/**
+ * Finite-number spec that is also a constraint factory and a holder of named presets.
+ * Use as `Number`, `Number({ min, max, exclusiveMin, exclusiveMax, integer })`, or `Number.Port`.
+ */
 const NumberSpec: StrictEnvNumberSpecFactory = Object.assign(
   (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber => createNumberSpec(constraints),
   { type: 'number' } as const satisfies StrictEnvTypeNumber,
