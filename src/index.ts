@@ -8,14 +8,18 @@ export type StrictEnvTypeString = { type: 'string' };
 
 /**
  * Optional constraints for a numeric environment variable spec.
- * Used by {@link StrictEnvType.Number} when called as a factory, and by sugar specs
- * such as {@link StrictEnvType.PositiveInt} / {@link StrictEnvType.NegativeInt}.
+ * Used by {@link StrictEnvType.Number} when called as a factory, and by nested presets
+ * such as {@link StrictEnvType.Number.Port} / {@link StrictEnvType.Number.PositiveInteger}.
  */
 export type StrictEnvNumberConstraints = {
-  /** Inclusive lower bound. */
+  /** Inclusive lower bound (`n >= min`). */
   min?: number;
-  /** Inclusive upper bound. */
+  /** Inclusive upper bound (`n <= max`). */
   max?: number;
+  /** Exclusive lower bound (`n > exclusiveMin`). */
+  exclusiveMin?: number;
+  /** Exclusive upper bound (`n < exclusiveMax`). */
+  exclusiveMax?: number;
   /** When `true`, the value must be an integer (`Number.isInteger`). */
   integer?: boolean;
 };
@@ -23,7 +27,8 @@ export type StrictEnvNumberConstraints = {
 /**
  * Spec for a numeric environment variable.
  * Values are parsed with `Number()`; `NaN`, `Infinity`, and `-Infinity` are rejected.
- * Optional {@link StrictEnvNumberConstraints} (`min`, `max`, `integer`) narrow accepted values.
+ * Optional {@link StrictEnvNumberConstraints} (`min`, `max`, `exclusiveMin`, `exclusiveMax`, `integer`)
+ * narrow accepted values.
  * Defaults belong in {@link StrictEnvOptions}, not on this spec.
  */
 export type StrictEnvTypeNumber = { type: 'number' } & StrictEnvNumberConstraints;
@@ -86,8 +91,8 @@ export type StrictEnvSpec =
  * Discriminated union of error kinds emitted during environment variable parsing.
  *
  * - `missing` — Variable unset, empty string, or whitespace-only (when trim is enabled) without a default.
- * - `invalid_number` — Value is not a finite number, not an integer when required, or outside `min`/`max`
- *   (see {@link StrictEnvTypeNumber}).
+ * - `invalid_number` — Value is not a finite number, not an integer when required, or outside
+ *   `min` / `max` / `exclusiveMin` / `exclusiveMax` (see {@link StrictEnvTypeNumber}).
  * - `invalid_enum` — Value is not one of the allowed enum choices.
  */
 export type StrictEnvErrorKind = 'missing' | 'invalid_number' | 'invalid_enum';
@@ -180,33 +185,71 @@ export class StrictEnvValidationError<K extends string = string> extends StrictE
 /**
  * Builds a numeric env spec from optional constraints.
  *
- * @param constraints - Optional `min`, `max`, and/or `integer` bounds.
+ * @param constraints - Optional `min`, `max`, `exclusiveMin`, `exclusiveMax`, and/or `integer` bounds.
  * @returns Number spec for use with `resolve` or `resolveAll`.
  */
 const createNumberSpec = (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber => ({
   type: 'number',
   ...(constraints?.min !== undefined ? { min: constraints.min } : {}),
   ...(constraints?.max !== undefined ? { max: constraints.max } : {}),
+  ...(constraints?.exclusiveMin !== undefined ? { exclusiveMin: constraints.exclusiveMin } : {}),
+  ...(constraints?.exclusiveMax !== undefined ? { exclusiveMax: constraints.exclusiveMax } : {}),
   ...(constraints?.integer !== undefined ? { integer: constraints.integer } : {}),
 });
 
 /**
+ * Named number presets nested under {@link StrictEnvType.Number}.
+ * Each preset is sugar over {@link StrictEnvNumberConstraints}; parsing stays `type: 'number'`.
+ */
+type StrictEnvNumberPresets = {
+  /** Any integer. Sugar for `Number({ integer: true })`. */
+  Integer: StrictEnvTypeNumber;
+  /** Integer `>= 1`. Sugar for `Number({ min: 1, integer: true })`. */
+  PositiveInteger: StrictEnvTypeNumber;
+  /** Integer `<= -1`. Sugar for `Number({ max: -1, integer: true })`. */
+  NegativeInteger: StrictEnvTypeNumber;
+  /** Integer `>= 0`. Sugar for `Number({ min: 0, integer: true })`. */
+  NonNegativeInteger: StrictEnvTypeNumber;
+  /** Finite number `> 0`. Sugar for `Number({ exclusiveMin: 0 })`. */
+  Positive: StrictEnvTypeNumber;
+  /** Finite number `< 0`. Sugar for `Number({ exclusiveMax: 0 })`. */
+  Negative: StrictEnvTypeNumber;
+  /** Finite number `>= 0`. Sugar for `Number({ min: 0 })`. */
+  NonNegative: StrictEnvTypeNumber;
+  /** TCP/UDP port `1`–`65535`. Sugar for `Number({ min: 1, max: 65535, integer: true })`. */
+  Port: StrictEnvTypeNumber;
+};
+
+/**
  * Unconstrained finite-number spec, also callable as a factory for constrained specs.
+ * Named presets hang off the same object (`Number.Port`, `Number.PositiveInteger`, …).
  *
  * @example
  * ```ts
  * StrictEnvType.Number
  * StrictEnvType.Number({ min: 0 })
- * StrictEnvType.Number({ min: 1, max: 65535, integer: true })
+ * StrictEnvType.Number({ exclusiveMin: 0 })
+ * StrictEnvType.Number.Port
+ * StrictEnvType.Number.PositiveInteger
  * ```
  */
 type StrictEnvNumberSpecFactory = {
   (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber;
-} & StrictEnvTypeNumber;
+} & StrictEnvTypeNumber & StrictEnvNumberPresets;
 
 const NumberSpec: StrictEnvNumberSpecFactory = Object.assign(
   (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber => createNumberSpec(constraints),
   { type: 'number' } as const satisfies StrictEnvTypeNumber,
+  {
+    Integer: createNumberSpec({ integer: true }),
+    PositiveInteger: createNumberSpec({ min: 1, integer: true }),
+    NegativeInteger: createNumberSpec({ max: -1, integer: true }),
+    NonNegativeInteger: createNumberSpec({ min: 0, integer: true }),
+    Positive: createNumberSpec({ exclusiveMin: 0 }),
+    Negative: createNumberSpec({ exclusiveMax: 0 }),
+    NonNegative: createNumberSpec({ min: 0 }),
+    Port: createNumberSpec({ min: 1, max: 65535, integer: true }),
+  } as const satisfies StrictEnvNumberPresets,
 );
 
 /**
@@ -219,17 +262,10 @@ export const StrictEnvType = {
   String: { type: 'string' } as const satisfies StrictEnvTypeString,
   /**
    * Spec for a finite numeric value (`Number()` parsing; rejects `NaN` and `Infinity`).
-   * Use as `StrictEnvType.Number`, or call as `StrictEnvType.Number({ min, max, integer })`.
+   * Use as `StrictEnvType.Number`, call as `StrictEnvType.Number({ min, max, exclusiveMin, exclusiveMax, integer })`,
+   * or use a nested preset such as `StrictEnvType.Number.Port`.
    */
   Number: NumberSpec,
-  /**
-   * Spec for a positive integer (`>= 1`). Sugar for `Number({ min: 1, integer: true })`.
-   */
-  PositiveInt: createNumberSpec({ min: 1, integer: true }),
-  /**
-   * Spec for a negative integer (`<= -1`). Sugar for `Number({ max: -1, integer: true })`.
-   */
-  NegativeInt: createNumberSpec({ max: -1, integer: true }),
   /** Spec for a boolean value (`1`/`true`/`yes`/`on` → `true`; other non-empty values → `false`). */
   Boolean: { type: 'boolean' } as const satisfies StrictEnvTypeBoolean,
   /**
@@ -345,7 +381,7 @@ const normalizeEnvRaw = (raw: string | undefined, trim: boolean): string | undef
  * @param key - Environment variable name.
  * @param raw - Raw value from `process.env`, if present.
  * @param n - Parsed finite number.
- * @param constraints - Optional `min`, `max`, and/or `integer` constraints.
+ * @param constraints - Optional `min`, `max`, `exclusiveMin`, `exclusiveMax`, and/or `integer` constraints.
  * @returns `undefined` when valid; otherwise a structured validation error.
  */
 const validateNumberConstraints = <K extends string>(
@@ -365,10 +401,26 @@ const validateNumberConstraints = <K extends string>(
       kind: 'invalid_number',
     };
   }
+  if (constraints.exclusiveMin !== undefined && n <= constraints.exclusiveMin) {
+    return {
+      key,
+      message: `Env ${key}: must be > ${constraints.exclusiveMin}, got ${n}`,
+      raw,
+      kind: 'invalid_number',
+    };
+  }
   if (constraints.max !== undefined && n > constraints.max) {
     return {
       key,
       message: `Env ${key}: must be <= ${constraints.max}, got ${n}`,
+      raw,
+      kind: 'invalid_number',
+    };
+  }
+  if (constraints.exclusiveMax !== undefined && n >= constraints.exclusiveMax) {
+    return {
+      key,
+      message: `Env ${key}: must be < ${constraints.exclusiveMax}, got ${n}`,
       raw,
       kind: 'invalid_number',
     };
@@ -400,7 +452,8 @@ const resolveSchemaEntry = (
  *
  * Missing or empty (`""`) values use `defaultValue` when provided. When `trim` is enabled,
  * whitespace-only values are treated as empty. Number specs delegate to `parseNumber`, then
- * optional `min` / `max` / `integer` constraints (see {@link StrictEnvNumberConstraints}).
+ * optional `min` / `max` / `exclusiveMin` / `exclusiveMax` / `integer` constraints
+ * (see {@link StrictEnvNumberConstraints}).
  * Boolean specs treat `1`/`true`/`yes`/`on` (case-insensitive, after normalization) as `true`.
  * Enum specs require an exact match in `choices` (after normalization).
  *
@@ -536,9 +589,9 @@ const resolveAll = <TSchema extends StrictEnvSchema>(schema: TSchema): StrictEnv
  *
  * @example
  * ```ts
- * const port = StrictEnvResolver.resolve('PORT', StrictEnvType.PositiveInt);
+ * const port = StrictEnvResolver.resolve('PORT', StrictEnvType.Number.Port);
  * const envs = StrictEnvResolver.resolveAll({
- *   PORT: StrictEnvType.PositiveInt,
+ *   PORT: StrictEnvType.Number.Port,
  *   DEBUG: [StrictEnvType.Boolean, { default: false }],
  * });
  * ```
