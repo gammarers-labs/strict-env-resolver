@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/strict-env-resolver?style=flat-square)](https://www.npmjs.com/package/strict-env-resolver)
 [![license](https://img.shields.io/npm/l/strict-env-resolver?style=flat-square)](https://www.npmjs.com/package/strict-env-resolver)
 [![Node.js](https://img.shields.io/node/v/strict-env-resolver?style=flat-square)](https://www.npmjs.com/package/strict-env-resolver)
-[![build](https://img.shields.io/github/actions/workflow/status/gammarers-labs/strict-env-resolver/build.yml?branch=main&label=build&style=flat-square)](https://github.com/gammarers-labs/strict-env-resolver/actions/workflows/build.yml)
+[![build](https://img.shields.io/github/actions/workflow/status/gammarers-labs/strict-env-resolver/build.yml?label=build&style=flat-square)](https://github.com/gammarers-labs/strict-env-resolver/actions/workflows/build.yml)
 
 Type-safe environment variable resolver for Node.js. Reads and parses `process.env` with specs (`string`, `number`, `boolean`, `enum`), optional defaults, configurable trimming, and structured validation errors when values are missing or invalid.
 
@@ -21,7 +21,7 @@ Type-safe environment variable resolver for Node.js. Reads and parses `process.e
 
 ## How it works
 
-`resolve` reads one `process.env` key, trims it when the spec says so, parses it, and returns a typed value or throws `StrictEnvValidationError`. `resolveAll` does the same for every key in a schema and throws once with every issue collected.
+`resolve` reads one `process.env` key, trims it when trimming is enabled, parses it according to the spec, and returns a typed value or throws `StrictEnvValidationError`. Trimming defaults to on for `number`, `boolean`, and `enum`, and off for `string`; pass `options.trim` to override. `resolveAll` does the same for every key in a schema and throws once with every issue collected.
 
 Unset, empty, and (when trimming) whitespace-only values use `options.default` when provided; otherwise they fail with `kind: 'missing'`.
 
