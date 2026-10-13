@@ -14,14 +14,14 @@ Type-safe environment variable resolver for Node.js. Reads and parses `process.e
 - **Number presets**: Nested specs such as `Number.Port`, `Number.Integer`, and `Number.PositiveInteger`
 - **Optional defaults**: Fallback when a variable is unset, empty (`""`), or whitespace-only (when trimming is enabled)
 - **Configurable trim**: `trim` defaults to `true` for parsed types and `false` for strings; override per variable
-- **Batch parsing**: `resolveAll()` evaluates every key and throws once with all validation errors
+- **Batch parsing**: `resolves()` evaluates every key and throws once with all validation errors
 - **Structured errors**: `StrictEnvValidationError` exposes `errors` (`key`, `message`, `raw`, `kind`) and `keys`
 - **Boolean parsing**: `1`, `true`, `yes`, `on` (case-insensitive, after trim) → `true`; any other non-empty value → `false`
 - **Enum constraint**: Values must match one of the allowed choices (compared after trim)
 
 ## How it works
 
-`resolve` reads one `process.env` key, trims it when trimming is enabled, parses it according to the spec, and returns a typed value or throws `StrictEnvValidationError`. Trimming defaults to on for `number`, `boolean`, and `enum`, and off for `string`; pass `options.trim` to override. `resolveAll` does the same for every key in a schema and throws once with every issue collected.
+`resolve` reads one `process.env` key, trims it when trimming is enabled, parses it according to the spec, and returns a typed value or throws `StrictEnvValidationError`. Trimming defaults to on for `number`, `boolean`, and `enum`, and off for `string`; pass `options.trim` to override. `resolves` does the same for every key in a schema and throws once with every issue collected.
 
 Unset, empty, and (when trimming) whitespace-only values use `options.default` when provided; otherwise they fail with `kind: 'missing'`.
 
@@ -52,7 +52,7 @@ import { StrictEnvResolver, StrictEnvType } from 'strict-env-resolver';
 
 const port = StrictEnvResolver.resolve('PORT', StrictEnvType.Number.Port, { default: 3000 });
 
-const envs = StrictEnvResolver.resolveAll({
+const envs = StrictEnvResolver.resolves({
   PORT: [StrictEnvType.Number.Port, { default: 3000 }],
   DEBUG: [StrictEnvType.Boolean, { default: false }],
   MODE: StrictEnvType.Enum(['read', 'write'] as const),
@@ -103,7 +103,7 @@ const modeWithDefault = StrictEnvResolver.resolve(
 );
 
 try {
-  StrictEnvResolver.resolveAll({
+  StrictEnvResolver.resolves({
     PORT: StrictEnvType.Number.Port,
     MODE: StrictEnvType.Enum(['read', 'write'] as const),
   });
@@ -130,7 +130,7 @@ try {
 | **spec** | No | Type spec; defaults to `StrictEnvType.String`. Use `StrictEnvType.String`, `StrictEnvType.Number` (or a nested preset such as `Number.Port`), `StrictEnvType.Boolean`, or `StrictEnvType.Enum(choices)`. |
 | **options** | No | See [`StrictEnvOptions`](#strictenvoptions) below. |
 
-### `StrictEnvResolver.resolveAll(schema)`
+### `StrictEnvResolver.resolves(schema)`
 
 `schema` is an object where each key is an env var name and each value is either:
 

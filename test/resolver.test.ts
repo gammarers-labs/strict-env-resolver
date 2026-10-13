@@ -714,12 +714,12 @@ describe('StrictEnvResolver.resolve', () => {
   });
 });
 
-describe('StrictEnvResolver.resolveAll', () => {
+describe('StrictEnvResolver.resolves', () => {
   test('should return parsed values with defaults', () => {
     setEnv('TEST_PORT', '1234');
     unsetEnv('TEST_MODE');
 
-    const envs = StrictEnvResolver.resolveAll({
+    const envs = StrictEnvResolver.resolves({
       TEST_PORT: StrictEnvType.Number.Port,
       TEST_DEBUG: [StrictEnvType.Boolean, { default: false }],
       TEST_MODE: [StrictEnvType.Enum(['read', 'write'] as const), { default: 'read' }],
@@ -738,7 +738,7 @@ describe('StrictEnvResolver.resolveAll', () => {
 
   test('should use default for empty string', () => {
     setEnv('TEST_PORT', '');
-    const envs = StrictEnvResolver.resolveAll({
+    const envs = StrictEnvResolver.resolves({
       TEST_PORT: [StrictEnvType.Number, { default: 3000 }],
     });
     expect(envs).toEqual({ TEST_PORT: 3000 });
@@ -749,8 +749,8 @@ describe('StrictEnvResolver.resolveAll', () => {
     setEnv('TEST_PORT', 'not-a-number');
 
     try {
-      StrictEnvResolver.resolveAll({ TEST_PORT: StrictEnvType.Number });
-      throw new Error('Expected resolveAll to throw');
+      StrictEnvResolver.resolves({ TEST_PORT: StrictEnvType.Number });
+      throw new Error('Expected resolves to throw');
     } catch (e) {
       expect(e).toBeInstanceOf(StrictEnvValidationError);
       const ve = e as StrictEnvValidationError<'TEST_PORT'>;
@@ -773,11 +773,11 @@ describe('StrictEnvResolver.resolveAll', () => {
     setEnv('TEST_MODE', 'bad');
 
     try {
-      StrictEnvResolver.resolveAll({
+      StrictEnvResolver.resolves({
         TEST_PORT: StrictEnvType.Number,
         TEST_MODE: StrictEnvType.Enum(['read', 'write'] as const),
       });
-      throw new Error('Expected resolveAll to throw');
+      throw new Error('Expected resolves to throw');
     } catch (e) {
       expect(e).toBeInstanceOf(StrictEnvValidationError);
       const ve = e as StrictEnvValidationError<'TEST_PORT' | 'TEST_MODE'>;
@@ -808,12 +808,12 @@ describe('StrictEnvResolver.resolveAll', () => {
     setEnv('TEST_MODE', 'invalid');
 
     try {
-      StrictEnvResolver.resolveAll({
+      StrictEnvResolver.resolves({
         TEST_PORT: StrictEnvType.Number,
         TEST_WORKERS: StrictEnvType.Number,
         TEST_MODE: StrictEnvType.Enum(['read', 'write'] as const),
       });
-      throw new Error('Expected resolveAll to throw');
+      throw new Error('Expected resolves to throw');
     } catch (e) {
       expect(e).toBeInstanceOf(StrictEnvValidationError);
       const ve = e as StrictEnvValidationError<'TEST_PORT' | 'TEST_WORKERS' | 'TEST_MODE'>;
@@ -849,7 +849,7 @@ describe('StrictEnvResolver.resolveAll', () => {
     setEnv('TEST_DEBUG', 'true');
     setEnv('TEST_VERBOSE', '0');
 
-    const envs = StrictEnvResolver.resolveAll({
+    const envs = StrictEnvResolver.resolves({
       TEST_DEBUG: StrictEnvType.Boolean,
       TEST_VERBOSE: StrictEnvType.Boolean,
     });
@@ -867,7 +867,7 @@ describe('StrictEnvResolver.resolveAll', () => {
     setEnv('TEST_MODE', 'write');
     setEnv('TEST_LABEL', 'my-app');
 
-    const envs = StrictEnvResolver.resolveAll({
+    const envs = StrictEnvResolver.resolves({
       TEST_MODE: StrictEnvType.Enum(['read', 'write'] as const),
       TEST_LABEL: StrictEnvType.String,
     });
