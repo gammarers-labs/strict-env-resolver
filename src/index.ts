@@ -141,7 +141,7 @@ export abstract class StrictEnvError extends Error {
  * Validation error that carries one or more environment variable issues.
  *
  * Thrown by `StrictEnvResolver.resolve()` (single-entry `errors`) and
- * `StrictEnvResolver.resolveAll()` (multi-entry `errors`).
+ * `StrictEnvResolver.resolves()` (multi-entry `errors`).
  * Individual entries are produced by the internal `parseEnvValue` helper.
  *
  * @template K - Union of environment variable keys included in `errors`.
@@ -205,7 +205,7 @@ const MAX_PORT = 65535;
  * Builds a numeric env spec from optional constraints.
  *
  * @param constraints - Optional `min`, `max`, `exclusiveMin`, `exclusiveMax`, and/or `integer` bounds.
- * @returns Number spec for use with `resolve` or `resolveAll`.
+ * @returns Number spec for use with `resolve` or `resolves`.
  */
 const createNumberSpec = (constraints?: StrictEnvNumberConstraints): StrictEnvTypeNumber => ({
   type: 'number',
@@ -278,9 +278,9 @@ const NumberSpec: StrictEnvNumberSpecFactory = Object.assign(
 );
 
 /**
- * Predefined spec constants for use with `resolve` or as schema values in `resolveAll`.
+ * Predefined spec constants for use with `resolve` or as schema values in `resolves`.
  * Specs describe type only; provide `default` / `trim` via {@link StrictEnvOptions}
- * (third argument of `resolve`, or a `[spec, options]` tuple in `resolveAll`).
+ * (third argument of `resolve`, or a `[spec, options]` tuple in `resolves`).
  */
 export const StrictEnvType = {
   /** Spec for a string value (returned as-is unless `trim: true` is set in options). */
@@ -297,7 +297,7 @@ export const StrictEnvType = {
    * Returns a spec that restricts the value to one of the given choices.
    *
    * @param choices - Allowed string literals.
-   * @returns Enum spec for use with `resolve` or `resolveAll`.
+   * @returns Enum spec for use with `resolve` or `resolves`.
    */
   Enum: <T extends string>(choices: readonly T[]) => ({ type: 'enum', choices }) as StrictEnvTypeEnum<T>,
 } as const;
@@ -315,7 +315,7 @@ export type StrictEnvSpecToType<S> =
 
 /**
  * Options for reading an environment variable with an optional default.
- * Used as the third argument to `resolve` or as the second element of a `[spec, options]` tuple in `resolveAll`.
+ * Used as the third argument to `resolve` or as the second element of a `[spec, options]` tuple in `resolves`.
  *
  * `trim` defaults to `true` for `number`, `boolean`, and `enum` specs (whitespace-only values are
  * treated as missing). For `string` specs it defaults to `false` (values are returned as-is).
@@ -338,7 +338,7 @@ export type StrictEnvOptions<S extends StrictEnvSpec> = {
 export type StrictEnvSchemaEntry<S extends StrictEnvSpec = StrictEnvSpec> = S | readonly [S, StrictEnvOptions<S>];
 
 /**
- * Schema object used by `resolveAll()`.
+ * Schema object used by `resolves()`.
  *
  * Keys are env var names; values are specs or `[spec, options]` tuples.
  */
@@ -354,7 +354,7 @@ type StrictEnvSchemaEntryToSpec<E> = E extends readonly [infer S, unknown] ? S :
 /**
  * Maps a schema object to the resulting parsed environment object type.
  *
- * @template TSchema - Schema object type passed to `resolveAll`.
+ * @template TSchema - Schema object type passed to `resolves`.
  */
 export type StrictEnvSchemaToType<TSchema extends StrictEnvSchema> = {
   [K in keyof TSchema]: StrictEnvSpecToType<StrictEnvSchemaEntryToSpec<TSchema[K]> & StrictEnvSpec>;
@@ -466,7 +466,7 @@ type ParseEnvValueOptions<S extends StrictEnvSpec> = Pick<StrictEnvOptions<S>, '
  * Resolves a schema entry into its spec and optional per-key options.
  *
  * @param entry - Schema entry or `[spec, options]` tuple.
- * @returns Parsed spec and options for `resolveAll`.
+ * @returns Parsed spec and options for `resolves`.
  */
 const resolveSchemaEntry = (
   entry: StrictEnvSchemaEntry,
@@ -478,7 +478,7 @@ const resolveSchemaEntry = (
 /**
  * Parses a single environment variable according to the given spec.
  *
- * Central validation helper shared by `resolve` and `resolveAll`. Does not throw;
+ * Central validation helper shared by `resolve` and `resolves`. Does not throw;
  * callers decide whether to throw immediately or collect errors.
  *
  * Missing or empty (`""`) values use `defaultValue` when provided. When `trim` is enabled,
@@ -596,7 +596,7 @@ const resolve = <K extends string, S extends StrictEnvSpec = StrictEnvTypeString
  * @throws {StrictEnvValidationError} When one or more variables are missing, empty without a default,
  *   whitespace-only without a default (when trimming), or invalid.
  */
-const resolveAll = <TSchema extends StrictEnvSchema>(schema: TSchema): StrictEnvSchemaToType<TSchema> => {
+const resolves = <TSchema extends StrictEnvSchema>(schema: TSchema): StrictEnvSchemaToType<TSchema> => {
   const envs: Partial<StrictEnvSchemaToType<TSchema>> = {};
   const errors: StrictEnvValidationEntry<Extract<keyof TSchema, string>>[] = [];
 
@@ -621,7 +621,7 @@ const resolveAll = <TSchema extends StrictEnvSchema>(schema: TSchema): StrictEnv
  * @example
  * ```ts
  * const port = StrictEnvResolver.resolve('PORT', StrictEnvType.Number.Port);
- * const envs = StrictEnvResolver.resolveAll({
+ * const envs = StrictEnvResolver.resolves({
  *   PORT: StrictEnvType.Number.Port,
  *   DEBUG: [StrictEnvType.Boolean, { default: false }],
  * });
@@ -630,6 +630,6 @@ const resolveAll = <TSchema extends StrictEnvSchema>(schema: TSchema): StrictEnv
 export const StrictEnvResolver = {
   /** Reads and parses a single environment variable. See {@link resolve}. */
   resolve,
-  /** Reads and parses multiple environment variables in one pass. See {@link resolveAll}. */
-  resolveAll,
+  /** Reads and parses multiple environment variables in one pass. See {@link resolves}. */
+  resolves,
 } as const;
