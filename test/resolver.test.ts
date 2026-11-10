@@ -672,6 +672,21 @@ describe('StrictEnvResolver.resolve', () => {
       unsetEnv('TEST_BOOL');
     });
 
+    test('should keep surrounding whitespace when trim is false', () => {
+      setEnv('TEST_BOOL', ' true ');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean, { trim: false }),
+        'TEST_BOOL',
+        {
+          key: 'TEST_BOOL',
+          message: 'Env TEST_BOOL: must be one of [1, true, yes, on, 0, false, no, off], got " true "',
+          raw: ' true ',
+          kind: 'invalid_boolean',
+        },
+      );
+      unsetEnv('TEST_BOOL');
+    });
+
     test('should reject unknown tokens after trim', () => {
       setEnv('TEST_BOOL', '  enabled  ');
       expectResolveValidationError(

@@ -87,27 +87,35 @@ const parseBooleanEnvValue = (
   return undefined;
 };
 
+/** Whether leading and trailing whitespace is removed before validation. */
+type EnvWhitespace = 'trim' | 'preserve';
+
 /**
- * Default trim behavior per spec type.
+ * Default whitespace handling per spec type.
  * Parsed types trim by default; strings preserve the raw value unless opted in.
  *
  * @param spec - Environment variable spec.
- * @returns Whether leading/trailing whitespace should be trimmed before validation.
+ * @returns `preserve` for strings, `trim` for every other spec.
  */
-const defaultTrimForSpec = (spec: StrictEnvSpec): boolean => spec.type !== 'string';
+const defaultTrimForSpec = (spec: StrictEnvSpec): EnvWhitespace => {
+  if (spec.type === 'string') {
+    return 'preserve';
+  }
+  return 'trim';
+};
 
 /**
  * Normalizes a raw environment variable value before validation.
  *
  * @param raw - Raw value from `process.env`, if present.
- * @param trim - Whether to trim leading/trailing whitespace.
+ * @param whitespace - `trim` removes leading and trailing whitespace. `preserve` keeps the raw value.
  * @returns Normalized value, or `undefined` when unset.
  */
-const normalizeEnvRaw = (raw: string | undefined, trim: boolean): string | undefined => {
+const normalizeEnvRaw = (raw: string | undefined, whitespace: EnvWhitespace): string | undefined => {
   if (raw == null) {
     return undefined;
   }
-  if (!trim) {
+  if (whitespace === 'preserve') {
     return raw;
   }
   return raw.trim();
@@ -180,6 +188,27 @@ const validateNumberConstraints = <K extends string>(
 type ParseEnvValueOptions<S extends StrictEnvSpec> = Pick<StrictEnvOptions<S>, 'trim'>;
 
 /**
+ * Maps the public `trim` option onto {@link EnvWhitespace}.
+ * An omitted `trim` uses {@link defaultTrimForSpec}.
+ *
+ * @param spec - Environment variable spec.
+ * @param options - Optional trim override from {@link StrictEnvOptions}.
+ * @returns Whitespace mode for normalization.
+ */
+const whitespaceForOptions = <S extends StrictEnvSpec>(
+  spec: S,
+  options?: ParseEnvValueOptions<S>,
+): EnvWhitespace => {
+  if (options?.trim === true) {
+    return 'trim';
+  }
+  if (options?.trim === false) {
+    return 'preserve';
+  }
+  return defaultTrimForSpec(spec);
+};
+
+/**
  * Parses a single environment variable according to the given spec.
  *
  * Central validation helper shared by `resolve` and `resolves`.
@@ -215,8 +244,7 @@ export const parseEnvValue = <K extends string, S extends StrictEnvSpec>(
   defaultValue: StrictEnvSpecToType<S> | undefined,
   options?: ParseEnvValueOptions<S>,
 ): StrictEnvSpecToType<S> => {
-  const trim = options?.trim ?? defaultTrimForSpec(spec);
-  const normalizedRaw = normalizeEnvRaw(raw, trim);
+  const normalizedRaw = normalizeEnvRaw(raw, whitespaceForOptions(spec, options));
   const hasDefault = defaultValue !== undefined;
 
   if (normalizedRaw == null || normalizedRaw === '') {
