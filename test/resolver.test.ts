@@ -1008,6 +1008,28 @@ describe('StrictEnvResolver.resolves', () => {
     unsetEnv('TEST_VERBOSE');
   });
 
+  test('should rethrow errors that are not validation errors', () => {
+    setEnv('TEST_NUM', '1');
+
+    try {
+      StrictEnvResolver.resolves({
+        TEST_NUM: {
+          type: 'number',
+          get min(): number {
+            throw new Error('constraint failed');
+          },
+        },
+      });
+      throw new Error('Expected resolves to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(Error);
+      expect(e).not.toBeInstanceOf(StrictEnvValidationError);
+      expect((e as Error).message).toBe('constraint failed');
+    }
+
+    unsetEnv('TEST_NUM');
+  });
+
   test('should parse valid enum and string values', () => {
     setEnv('TEST_MODE', 'write');
     setEnv('TEST_LABEL', 'my-app');
