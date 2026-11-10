@@ -1,4 +1,5 @@
 import {
+  type StrictEnvBooleanVocabulary,
   type StrictEnvNumberConstraints,
   type StrictEnvOptions,
   type StrictEnvSpec,
@@ -7,10 +8,28 @@ import {
 import { StrictEnvValidationError } from './errors';
 
 /**
- * Pattern for boolean env values that parse as `true`.
- * Matches `1`, `true`, `yes`, and `on` (case-insensitive) on the full trimmed string.
+ * Flag vocabulary tokens that parse as `true` (case-insensitive).
+ * `1`, `true`, `yes`, and `on`.
  */
-const TRUE_BOOLEAN_PATTERN = /^(1|true|yes|on)$/i;
+const BOOLEAN_FLAG_TRUE_TOKENS: readonly string[] = ['1', 'true', 'yes', 'on'];
+
+/**
+ * Flag vocabulary tokens that parse as `false` (case-insensitive).
+ * `0`, `false`, `no`, and `off`. Tokens outside both flag sets are rejected.
+ */
+const BOOLEAN_FLAG_FALSE_TOKENS: readonly string[] = ['0', 'false', 'no', 'off'];
+
+/** Literal vocabulary token that parses as `true`. */
+const BOOLEAN_LITERAL_TRUE_TOKENS: readonly string[] = ['true'];
+
+/** Literal vocabulary token that parses as `false`. */
+const BOOLEAN_LITERAL_FALSE_TOKENS: readonly string[] = ['false'];
+
+/** True and false tokens for one boolean vocabulary. */
+type BooleanTokenSet = {
+  trueTokens: readonly string[];
+  falseTokens: readonly string[];
+};
 
 /**
  * Parses a string as a finite number for environment variables.
@@ -27,12 +46,46 @@ const parseNumber = (raw: string): number | undefined => {
 };
 
 /**
+ * Token sets for a boolean vocabulary.
+ * Omitted vocabulary uses the flag set so `{ type: 'boolean' }` stays valid.
+ *
+ * @param vocabulary - Token vocabulary from the boolean spec, if set.
+ * @returns True and false tokens for that vocabulary.
+ */
+const booleanTokenSet = (vocabulary: StrictEnvBooleanVocabulary | undefined): BooleanTokenSet => {
+  if (vocabulary === 'literal') {
+    return {
+      trueTokens: BOOLEAN_LITERAL_TRUE_TOKENS,
+      falseTokens: BOOLEAN_LITERAL_FALSE_TOKENS,
+    };
+  }
+  return {
+    trueTokens: BOOLEAN_FLAG_TRUE_TOKENS,
+    falseTokens: BOOLEAN_FLAG_FALSE_TOKENS,
+  };
+};
+
+/**
  * Parses a normalized string as a boolean environment variable value.
  *
  * @param normalizedRaw - Normalized environment variable value (trimmed when `trim` is enabled).
- * @returns `true` for `1`/`true`/`yes`/`on` (case-insensitive); otherwise `false`.
+ * @param vocabulary - Token vocabulary. Omitted values use the flag set.
+ * @returns `true` or `false` when the token is in the vocabulary; `undefined` when it is not.
  */
-const parseBooleanEnvValue = (normalizedRaw: string): boolean => TRUE_BOOLEAN_PATTERN.test(normalizedRaw);
+const parseBooleanEnvValue = (
+  normalizedRaw: string,
+  vocabulary: StrictEnvBooleanVocabulary | undefined,
+): boolean | undefined => {
+  const token = normalizedRaw.toLowerCase();
+  const { trueTokens, falseTokens } = booleanTokenSet(vocabulary);
+  if (trueTokens.includes(token)) {
+    return true;
+  }
+  if (falseTokens.includes(token)) {
+    return false;
+  }
+  return undefined;
+};
 
 /**
  * Default trim behavior per spec type.
@@ -137,7 +190,11 @@ type ParseEnvValueOptions<S extends StrictEnvSpec> = Pick<StrictEnvOptions<S>, '
  * whitespace-only values are treated as empty. Number specs delegate to `parseNumber`, then
  * optional `min` / `max` / `exclusiveMin` / `exclusiveMax` / `integer` constraints
  * (see {@link StrictEnvNumberConstraints}).
- * Boolean specs treat `1`/`true`/`yes`/`on` (case-insensitive, after normalization) as `true`.
+ * Boolean specs accept a closed, case-insensitive token set after normalization.
+ * `vocabulary: 'flag'` (the default, including when omitted) accepts
+ * `1`/`true`/`yes`/`on` as `true` and `0`/`false`/`no`/`off` as `false`.
+ * `vocabulary: 'literal'` accepts only `true` and `false`.
+ * Any other non-empty value fails with `kind: 'invalid_boolean'`.
  * Enum specs require an exact match in `choices` (after normalization).
  *
  * @template K - Environment variable key type.
@@ -188,8 +245,20 @@ export const parseEnvValue = <K extends string, S extends StrictEnvSpec>(
       validateNumberConstraints(key, raw, n, spec);
       return n as StrictEnvSpecToType<S>;
     }
-    case 'boolean':
-      return parseBooleanEnvValue(normalizedRaw) as StrictEnvSpecToType<S>;
+    case 'boolean': {
+      const parsed = parseBooleanEnvValue(normalizedRaw, spec.vocabulary);
+      if (parsed === undefined) {
+        const { trueTokens, falseTokens } = booleanTokenSet(spec.vocabulary);
+        const choices = [...trueTokens, ...falseTokens].join(', ');
+        throw new StrictEnvValidationError([{
+          key,
+          message: `Env ${key}: must be one of [${choices}], got "${raw}"`,
+          raw,
+          kind: 'invalid_boolean',
+        }]);
+      }
+      return parsed as StrictEnvSpecToType<S>;
+    }
     case 'enum':
       if (!spec.choices.includes(normalizedRaw)) {
         throw new StrictEnvValidationError([{

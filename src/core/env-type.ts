@@ -34,13 +34,28 @@ export type StrictEnvNumberConstraints = {
 export type StrictEnvTypeNumber = { type: 'number' } & StrictEnvNumberConstraints;
 
 /**
+ * Accepted boolean token vocabulary.
+ * Comparison is case-insensitive after normalization.
+ *
+ * - `flag` — `1` / `true` / `yes` / `on` are `true`; `0` / `false` / `no` / `off` are `false`.
+ * - `literal` — only `true` and `false`.
+ *
+ * Any other non-empty value is rejected.
+ */
+export type StrictEnvBooleanVocabulary = 'flag' | 'literal';
+
+/**
  * Spec for a boolean environment variable.
- * Parses `1`, `true`, `yes`, `on` (case-insensitive, after normalization) as `true`;
- * any other non-empty value as `false`.
+ * Accepts a closed token set from {@link StrictEnvBooleanVocabulary}.
+ * Omitted `vocabulary` uses `flag`.
  * Trims leading/trailing whitespace by default (see {@link StrictEnvOptions.trim}).
  * Defaults belong in {@link StrictEnvOptions}, not on this spec.
  */
-export type StrictEnvTypeBoolean = { type: 'boolean' };
+export type StrictEnvTypeBoolean = {
+  type: 'boolean';
+  /** Token vocabulary. Omitted values use `flag`. */
+  vocabulary?: StrictEnvBooleanVocabulary;
+};
 
 /**
  * Spec for an enum environment variable with a fixed set of choices.
@@ -155,6 +170,39 @@ const NumberSpec: StrictEnvNumberSpecFactory = Object.assign(
 );
 
 /**
+ * Named boolean presets nested under {@link StrictEnvType.Boolean}.
+ * Each preset is still a `boolean` spec; parsing stays `type: 'boolean'`.
+ */
+type StrictEnvBooleanPresets = {
+  /**
+   * Only `true` and `false` (case-insensitive).
+   * Sugar for `{ type: 'boolean', vocabulary: 'literal' }`.
+   */
+  Literal: StrictEnvTypeBoolean;
+};
+
+/**
+ * Flag-vocabulary boolean spec plus named presets (`Boolean.Literal`).
+ */
+type StrictEnvBooleanSpec = StrictEnvTypeBoolean & StrictEnvBooleanPresets;
+
+/**
+ * Boolean spec (`vocabulary: 'flag'`) with a narrower `Literal` preset.
+ *
+ * @example
+ * ```ts
+ * StrictEnvType.Boolean
+ * StrictEnvType.Boolean.Literal
+ * ```
+ */
+const BooleanSpec: StrictEnvBooleanSpec = Object.assign(
+  { type: 'boolean', vocabulary: 'flag' } as const satisfies StrictEnvTypeBoolean,
+  {
+    Literal: { type: 'boolean', vocabulary: 'literal' } as const satisfies StrictEnvTypeBoolean,
+  } as const satisfies StrictEnvBooleanPresets,
+);
+
+/**
  * Predefined spec constants for use with `resolve` or as schema values in `resolves`.
  * Specs describe type only; provide `default` / `trim` via {@link StrictEnvOptions}
  * (third argument of `resolve`, or a `[spec, options]` tuple in `resolves`).
@@ -168,8 +216,12 @@ export const StrictEnvType = {
    * or use a nested preset such as `StrictEnvType.Number.Port`.
    */
   Number: NumberSpec,
-  /** Spec for a boolean value (`1`/`true`/`yes`/`on` → `true`; other non-empty values → `false`). */
-  Boolean: { type: 'boolean' } as const satisfies StrictEnvTypeBoolean,
+  /**
+   * Spec for a boolean value (`vocabulary: 'flag'`).
+   * `1` / `true` / `yes` / `on` are `true`; `0` / `false` / `no` / `off` are `false` (case-insensitive).
+   * Any other non-empty value is rejected. Use `StrictEnvType.Boolean.Literal` for `true` / `false` only.
+   */
+  Boolean: BooleanSpec,
   /**
    * Returns a spec that restricts the value to one of the given choices.
    *

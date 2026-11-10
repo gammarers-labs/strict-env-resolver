@@ -5,6 +5,7 @@
 export { StrictEnvResolver, StrictEnvType } from './resolver';
 
 export type {
+  StrictEnvBooleanVocabulary,
   StrictEnvNumberConstraints,
   StrictEnvOptions,
   StrictEnvSchema,

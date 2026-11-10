@@ -9,6 +9,7 @@ import { StrictEnvValidationError, type StrictEnvValidationEntry } from './core/
 import { parseEnvValue } from './core/parse';
 
 export type {
+  StrictEnvBooleanVocabulary,
   StrictEnvNumberConstraints,
   StrictEnvOptions,
   StrictEnvSpec,

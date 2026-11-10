@@ -4,9 +4,11 @@
  * - `missing` — Variable unset, empty string, or whitespace-only (when trim is enabled) without a default.
  * - `invalid_number` — Value is not a finite number, not an integer when required, or outside
  *   `min` / `max` / `exclusiveMin` / `exclusiveMax` (see {@link StrictEnvTypeNumber}).
+ * - `invalid_boolean` — Value is not in the boolean vocabulary
+ *   (`flag`: `1` / `true` / `yes` / `on` / `0` / `false` / `no` / `off`; `literal`: `true` / `false`).
  * - `invalid_enum` — Value is not one of the allowed enum choices.
  */
-export type StrictEnvErrorKind = 'missing' | 'invalid_number' | 'invalid_enum';
+export type StrictEnvErrorKind = 'missing' | 'invalid_number' | 'invalid_boolean' | 'invalid_enum';
 
 /**
  * A structured validation error entry for a single environment variable.
