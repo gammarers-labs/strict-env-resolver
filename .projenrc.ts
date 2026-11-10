@@ -5,7 +5,7 @@ const project = new ProjenTypeScriptProject({
   description: 'Type-safe environment variable getter for Node.js. Reads and parses process.env with specs (string, number, boolean, enum), optional defaults, and structured validation errors when values are missing or invalid.',
   keywords: ['environment', 'variables', 'getter', 'safe', 'env'],
   devDeps: [
-    '@gammarers/projen-projects@^0.5.7',
+    '@gammarers/projen-projects@^0.8.0',
   ],
   releaseToNpm: true,
   npmTrustedPublishing: false,
