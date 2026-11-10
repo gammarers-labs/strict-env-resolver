@@ -645,9 +645,77 @@ describe('StrictEnvResolver.resolve', () => {
       unsetEnv('TEST_BOOL');
     });
 
-    test.each(['0', 'false', 'no', 'off'])('should parse %s as false', (val) => {
+    test.each(['0', 'false', 'FALSE', 'False', 'no', 'NO', 'off', 'OFF'])('should parse %s as false', (val) => {
       setEnv('TEST_BOOL', val);
       expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toBe(false);
+      unsetEnv('TEST_BOOL');
+    });
+
+    test.each(['  false  ', ' 0 ', ' NO '])('should parse trimmed %s as false', (val) => {
+      setEnv('TEST_BOOL', val);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toBe(false);
+      unsetEnv('TEST_BOOL');
+    });
+
+    test.each(['enabled', 'truee', '2'])('should reject %s', (val) => {
+      setEnv('TEST_BOOL', val);
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean),
+        'TEST_BOOL',
+        {
+          key: 'TEST_BOOL',
+          message: `Env TEST_BOOL: must be one of [1, true, yes, on, 0, false, no, off], got "${val}"`,
+          raw: val,
+          kind: 'invalid_boolean',
+        },
+      );
+      unsetEnv('TEST_BOOL');
+    });
+
+    test('should keep surrounding whitespace when trim is false', () => {
+      setEnv('TEST_BOOL', ' true ');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean, { trim: false }),
+        'TEST_BOOL',
+        {
+          key: 'TEST_BOOL',
+          message: 'Env TEST_BOOL: must be one of [1, true, yes, on, 0, false, no, off], got " true "',
+          raw: ' true ',
+          kind: 'invalid_boolean',
+        },
+      );
+      unsetEnv('TEST_BOOL');
+    });
+
+    test('should reject unknown tokens after trim', () => {
+      setEnv('TEST_BOOL', '  enabled  ');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean),
+        'TEST_BOOL',
+        {
+          key: 'TEST_BOOL',
+          message: 'Env TEST_BOOL: must be one of [1, true, yes, on, 0, false, no, off], got "  enabled  "',
+          raw: '  enabled  ',
+          kind: 'invalid_boolean',
+        },
+      );
+      unsetEnv('TEST_BOOL');
+    });
+
+    test('should use the flag vocabulary when vocabulary is omitted', () => {
+      setEnv('TEST_BOOL', 'yes');
+      expect(StrictEnvResolver.resolve('TEST_BOOL', { type: 'boolean' })).toBe(true);
+      setEnv('TEST_BOOL', 'enabled');
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_BOOL', { type: 'boolean' }),
+        'TEST_BOOL',
+        {
+          key: 'TEST_BOOL',
+          message: 'Env TEST_BOOL: must be one of [1, true, yes, on, 0, false, no, off], got "enabled"',
+          raw: 'enabled',
+          kind: 'invalid_boolean',
+        },
+      );
       unsetEnv('TEST_BOOL');
     });
 
@@ -667,6 +735,35 @@ describe('StrictEnvResolver.resolve', () => {
       expect(() => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean)).toThrow(
         'Missing required environment variable: TEST_BOOL',
       );
+    });
+  });
+
+  describe('Boolean.Literal', () => {
+    test.each(['true', 'TRUE', 'True', 'false', 'FALSE', 'False'])('should parse %s', (val) => {
+      setEnv('TEST_BOOL', val);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean.Literal)).toBe(val.toLowerCase() === 'true');
+      unsetEnv('TEST_BOOL');
+    });
+
+    test.each(['  true  ', '  FALSE  '])('should parse trimmed %s', (val) => {
+      setEnv('TEST_BOOL', val);
+      expect(StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean.Literal)).toBe(val.trim().toLowerCase() === 'true');
+      unsetEnv('TEST_BOOL');
+    });
+
+    test.each(['1', '0', 'yes', 'no', 'on', 'off', 'enabled'])('should reject %s', (val) => {
+      setEnv('TEST_BOOL', val);
+      expectResolveValidationError(
+        () => StrictEnvResolver.resolve('TEST_BOOL', StrictEnvType.Boolean.Literal),
+        'TEST_BOOL',
+        {
+          key: 'TEST_BOOL',
+          message: `Env TEST_BOOL: must be one of [true, false], got "${val}"`,
+          raw: val,
+          kind: 'invalid_boolean',
+        },
+      );
+      unsetEnv('TEST_BOOL');
     });
   });
 
@@ -845,6 +942,54 @@ describe('StrictEnvResolver.resolves', () => {
     unsetEnv('TEST_MODE');
   });
 
+  test('should collect invalid_boolean together with other errors', () => {
+    unsetEnv('TEST_PORT');
+    setEnv('TEST_DEBUG', 'truee');
+
+    try {
+      StrictEnvResolver.resolves({
+        TEST_PORT: StrictEnvType.Number,
+        TEST_DEBUG: StrictEnvType.Boolean,
+      });
+      throw new Error('Expected resolves to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(StrictEnvValidationError);
+      const ve = e as StrictEnvValidationError<'TEST_PORT' | 'TEST_DEBUG'>;
+      expect(ve.errors).toHaveLength(2);
+      expect(ve.keys).toEqual(['TEST_PORT', 'TEST_DEBUG']);
+      expect(ve.errors).toEqual([
+        {
+          key: 'TEST_PORT',
+          message: 'Missing required environment variable: TEST_PORT',
+          raw: undefined,
+          kind: 'missing',
+        },
+        {
+          key: 'TEST_DEBUG',
+          message: 'Env TEST_DEBUG: must be one of [1, true, yes, on, 0, false, no, off], got "truee"',
+          raw: 'truee',
+          kind: 'invalid_boolean',
+        },
+      ]);
+    }
+
+    unsetEnv('TEST_DEBUG');
+  });
+
+  test('should parse Boolean.Literal values when set in process.env', () => {
+    setEnv('TEST_ENABLED', 'false');
+
+    const envs = StrictEnvResolver.resolves({
+      TEST_ENABLED: StrictEnvType.Boolean.Literal,
+    });
+
+    expect(envs).toEqual({
+      TEST_ENABLED: false,
+    });
+
+    unsetEnv('TEST_ENABLED');
+  });
+
   test('should parse boolean values when set in process.env', () => {
     setEnv('TEST_DEBUG', 'true');
     setEnv('TEST_VERBOSE', '0');
@@ -861,6 +1006,28 @@ describe('StrictEnvResolver.resolves', () => {
 
     unsetEnv('TEST_DEBUG');
     unsetEnv('TEST_VERBOSE');
+  });
+
+  test('should rethrow errors that are not validation errors', () => {
+    setEnv('TEST_NUM', '1');
+
+    try {
+      StrictEnvResolver.resolves({
+        TEST_NUM: {
+          type: 'number',
+          get min(): number {
+            throw new Error('constraint failed');
+          },
+        },
+      });
+      throw new Error('Expected resolves to throw');
+    } catch (e) {
+      expect(e).toBeInstanceOf(Error);
+      expect(e).not.toBeInstanceOf(StrictEnvValidationError);
+      expect((e as Error).message).toBe('constraint failed');
+    }
+
+    unsetEnv('TEST_NUM');
   });
 
   test('should parse valid enum and string values', () => {

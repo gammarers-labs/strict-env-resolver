@@ -16,14 +16,14 @@ Type-safe environment variable resolver for Node.js. Reads and parses `process.e
 - **Configurable trim**: `trim` defaults to `true` for parsed types and `false` for strings; override per variable
 - **Batch parsing**: `resolves()` evaluates every key and throws once with all validation errors
 - **Structured errors**: `StrictEnvValidationError` exposes `errors` (`key`, `message`, `raw`, `kind`) and `keys`
-- **Boolean parsing**: `1`, `true`, `yes`, `on` (case-insensitive, after trim) → `true`; any other non-empty value → `false`
+- **Boolean parsing**: closed, case-insensitive tokens. `Boolean` accepts `1` / `true` / `yes` / `on` and `0` / `false` / `no` / `off`. Any other non-empty value fails. `Boolean.Literal` accepts only `true` and `false`
 - **Enum constraint**: Values must match one of the allowed choices (compared after trim)
 
 ## How it works
 
 `resolve` reads one `process.env` key, trims it when trimming is enabled, parses it according to the spec, and returns a typed value or throws `StrictEnvValidationError`. Trimming defaults to on for `number`, `boolean`, and `enum`, and off for `string`; pass `options.trim` to override. `resolves` does the same for every key in a schema and throws once with every issue collected.
 
-Unset, empty, and (when trimming) whitespace-only values use `options.default` when provided; otherwise they fail with `kind: 'missing'`.
+Unset, empty, and (when trimming) whitespace-only values use `options.default` when provided; otherwise they fail with `kind: 'missing'`. Boolean specs accept only their vocabulary's tokens (case-insensitive). Any other non-empty value fails with `kind: 'invalid_boolean'`.
 
 ## Installation
 
@@ -91,8 +91,10 @@ const timeoutMs = StrictEnvResolver.resolve('TIMEOUT_MS', StrictEnvType.Number, 
 const retries = StrictEnvResolver.resolve('RETRIES', StrictEnvType.Number.NonNegativeInteger, { default: 0 });
 // Custom bounds: StrictEnvType.Number({ min: 1, max: 1024, integer: true })
 
-// Boolean (1/true/yes/on → true after trim; other non-empty values → false)
+// Boolean (flag vocabulary: 1/true/yes/on → true; 0/false/no/off → false; other non-empty values are invalid)
 const debug = StrictEnvResolver.resolve('DEBUG', StrictEnvType.Boolean, { default: false });
+// Literal boolean (true/false only)
+const enabled = StrictEnvResolver.resolve('ENABLED', StrictEnvType.Boolean.Literal);
 
 // Enum (value must be in choices, compared after trim)
 const mode = StrictEnvResolver.resolve('MODE', StrictEnvType.Enum(['read', 'write'] as const));
@@ -111,7 +113,7 @@ try {
   if (e instanceof StrictEnvValidationError) {
     // e.errors: [{ key, message, raw?, kind }, ...]
     // e.keys:  ['PORT', 'MODE', ...]
-    // kind: 'missing' | 'invalid_number' | 'invalid_enum'
+    // kind: 'missing' | 'invalid_number' | 'invalid_boolean' | 'invalid_enum'
     console.error(e.errors);
   } else if (e instanceof StrictEnvError) {
     // Other package errors
@@ -127,7 +129,7 @@ try {
 | Argument | Required | Description |
 |----------|----------|-------------|
 | **key** | Yes | Environment variable name (e.g. `"PORT"`, `"NODE_ENV"`). |
-| **spec** | No | Type spec; defaults to `StrictEnvType.String`. Use `StrictEnvType.String`, `StrictEnvType.Number` (or a nested preset such as `Number.Port`), `StrictEnvType.Boolean`, or `StrictEnvType.Enum(choices)`. |
+| **spec** | No | Type spec; defaults to `StrictEnvType.String`. Use `StrictEnvType.String`, `StrictEnvType.Number` (or a nested preset such as `Number.Port`), `StrictEnvType.Boolean` (or `Boolean.Literal`), or `StrictEnvType.Enum(choices)`. |
 | **options** | No | See [`StrictEnvOptions`](#strictenvoptions) below. |
 
 ### `StrictEnvResolver.resolves(schema)`
@@ -152,7 +154,7 @@ Evaluates every entry in `schema`. If any value is missing, empty without a defa
 |------|----------|-------------|
 | `string` | `StrictEnvType.String` | Raw string value. Not trimmed by default; set `trim: true` to trim and treat whitespace-only as missing. |
 | `number` | `StrictEnvType.Number` | Finite numeric value (see below). Trimmed by default. Nested presets such as `Number.Port` are still `number` specs. |
-| `boolean` | `StrictEnvType.Boolean` | `1` / `true` / `yes` / `on` (case-insensitive, trimmed) → `true`; otherwise → `false`. Trimmed by default. |
+| `boolean` | `StrictEnvType.Boolean` | Closed token set (see below). `Boolean.Literal` accepts only `true` / `false`. Trimmed by default. |
 | `enum` | `StrictEnvType.Enum(choices)` | Value must be in `choices` (compared after trim). Trimmed by default. |
 
 #### `StrictEnvType.Number`
@@ -183,6 +185,27 @@ StrictEnvResolver.resolve('RATIO', StrictEnvType.Number.Positive);
 StrictEnvResolver.resolve('WORKERS', StrictEnvType.Number({ min: 1, max: 64, integer: true }));
 ```
 
+#### `StrictEnvType.Boolean`
+
+- Trims leading/trailing whitespace before validation (default `trim: true`).
+- Comparison is case-insensitive.
+- `StrictEnvType.Boolean` (`vocabulary: 'flag'`) accepts a closed set. Other non-empty values fail with `kind: 'invalid_boolean'`.
+- **True**: `1`, `true`, `yes`, `on`
+- **False**: `0`, `false`, `no`, `off`
+- Omitting `vocabulary` (`{ type: 'boolean' }`) uses the same flag set.
+- **Missing examples**: `""`, `"   "` (whitespace-only; `kind: 'missing'` unless a default is set)
+- **Rejected examples**: `"enabled"`, `"truee"`, `"2"`
+
+| Preset | Vocabulary | Accepted values |
+|--------|------------|-----------------|
+| `Boolean` | `flag` | `1` / `true` / `yes` / `on` → `true`; `0` / `false` / `no` / `off` → `false` |
+| `Boolean.Literal` | `literal` | `true` → `true`; `false` → `false`. `1`, `0`, `yes`, `no`, `on`, and `off` are rejected |
+
+```ts
+StrictEnvResolver.resolve('DEBUG', StrictEnvType.Boolean);
+StrictEnvResolver.resolve('ENABLED', StrictEnvType.Boolean.Literal);
+```
+
 ### Whitespace and trim
 
 | Spec | `trim` default | `""` | `"   "` (whitespace-only) | `" true "` |
@@ -208,6 +231,7 @@ StrictEnvResolver.resolve('PADDING', StrictEnvType.String, { trim: false });
 |--------|------|
 | `missing` | Variable unset, empty (`""`), or whitespace-only when trimming is enabled, without a default. |
 | `invalid_number` | Value is not a finite number, not an integer when required, or outside `min` / `max` / `exclusiveMin` / `exclusiveMax`. |
+| `invalid_boolean` | Value is not in the boolean vocabulary (`flag` or `literal`). |
 | `invalid_enum` | Value is not in `choices`. |
 
 **Message formats:**
@@ -216,6 +240,7 @@ StrictEnvResolver.resolve('PADDING', StrictEnvType.String, { trim: false });
 - Number: `Env <key>: expected number, got "<raw>"`
 - Integer: `Env <key>: expected integer, got "<raw>"`
 - Bounds: `Env <key>: must be >= <min>, got <n>` (also `<=`, `>`, `<`)
+- Boolean: `Env <key>: must be one of [<tokens>], got "<raw>"`
 - Enum: `Env <key>: must be one of [choice1, choice2, ...]`
 
 `StrictEnvValidationError` fields:
